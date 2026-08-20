@@ -6,6 +6,7 @@ const cloud_name =
   process.env.CLOUDINARY_NAME ||
   "";
 const api_key =
+  process.env.cloudanary_API_key ||
   process.env["cloudanary_API-key"] ||
   process.env.cloudanary_api_key ||
   process.env.CLOUDINARY_API_KEY ||
