@@ -71,7 +71,7 @@ flowchart TD
     subgraph Storage["Persistent Data & Cloud Services"]
         MongoDB[("MongoDB 8.5 (Indexed Mongoose Store)")]
         Cloudinary[("Cloudinary Media CDN")]
-        GeminiAPI["Google Gemini 1.5 Pro AI API"]
+        GeminiAPI["Google Gemini 2.5 Pro AI API"]
     end
 
     POS --> Gateway
@@ -143,7 +143,7 @@ sequenceDiagram
 | **Web Framework** | Express.js (v4.19.2) | Fast, unopinionated minimalist web framework |
 | **Database** | MongoDB (Mongoose v8.5.1) | Document-oriented NoSQL database with indexed schemas |
 | **Calendar Engine** | `nepali-date-converter` (v3.3.4) | Precise Bikram Sambat to Gregorian conversion algorithms |
-| **AI Multimodal** | Google Gemini 1.5 Pro | Drug interaction analysis, OCR parsing, clinical queries |
+| **AI Multimodal** | Google Gemini 2.5 Pro | Drug interaction analysis, OCR parsing, clinical queries |
 | **Media Storage** | Cloudinary SDK (v2.10.0) | Cloud-based receipt compression and image CDN hosting |
 | **Security & Auth** | JSON Web Tokens (`jsonwebtoken` v9.0) | Stateless claims-based authentication |
 | **Password Security**| `bcryptjs` (v3.0.3) | Salted one-way cryptographic password hashing |
@@ -171,7 +171,7 @@ sonisurgical-backend/
 │   │   ├── Transaction.js            # Ledger records: purchase/payment, BS timestamp, proof
 │   │   └── User.js                   # Staff & Admin user accounts with bcrypt hooks
 │   ├── routes/
-│   │   ├── aiExplain.js              # Gemini 1.5 Pro drug chat & clinical explanation
+│   │   ├── aiExplain.js              # Gemini 2.5 Pro drug chat & clinical explanation
 │   │   ├── auth.js                   # Login, registration, password updates, brute-force guard
 │   │   ├── medicines.js              # Inventory CRUD, stock adjustment, auto-complete
 │   │   ├── persons.js                # Customer directory, debt leaderboard, risk analysis
