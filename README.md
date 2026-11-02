@@ -5,7 +5,7 @@
 [![Express.js](https://img.shields.io/badge/Framework-Express%204.19-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![MongoDB](https://img.shields.io/badge/Database-MongoDB%20|%20Mongoose%208.5-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Nepali Calendar BS](https://img.shields.io/badge/Calendar-Bikram%20Sambat%20(BS)%202081+-D9381E)](https://en.wikipedia.org/wiki/Bikram_Sambat)
-[![Google Gemini AI](https://img.shields.io/badge/AI%20Engine-Gemini%201.5%20Pro%20Multi--Key%20Failover-8E75C2?logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![Google Gemini AI](https://img.shields.io/badge/AI%20Engine-Gemini%203.8%20Flash%20Multi--Key%20Failover-8E75C2?logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![Cloudinary](https://img.shields.io/badge/Cloud%20Media-Cloudinary%20API-3448C5?logo=cloudinary&logoColor=white)](https://cloudinary.com/)
 [![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel%20Serverless-000000?logo=vercel&logoColor=white)](https://vercel.com/)
 
@@ -71,7 +71,7 @@ flowchart TD
     subgraph Storage["Persistent Data & Cloud Services"]
         MongoDB[("MongoDB 8.5 (Indexed Mongoose Store)")]
         Cloudinary[("Cloudinary Media CDN")]
-        GeminiAPI["Google Gemini 4 Argon AI API"]
+        GeminiAPI["Google Gemini 3.8 Flash AI API"]
     end
 
     POS --> Gateway
@@ -143,7 +143,7 @@ sequenceDiagram
 | **Web Framework** | Express.js (v4.19.2) | Fast, unopinionated minimalist web framework |
 | **Database** | MongoDB (Mongoose v8.5.1) | Document-oriented NoSQL database with indexed schemas |
 | **Calendar Engine** | `nepali-date-converter` (v3.3.4) | Precise Bikram Sambat to Gregorian conversion algorithms |
-| **AI Multimodal** | Google Gemini 4 Argon | Drug interaction analysis, OCR parsing, clinical queries |
+| **AI Multimodal** | Google Gemini 3.8 Flash | Drug interaction analysis, OCR parsing, clinical queries |
 | **Media Storage** | Cloudinary SDK (v2.10.0) | Cloud-based receipt compression and image CDN hosting |
 | **Security & Auth** | JSON Web Tokens (`jsonwebtoken` v9.0) | Stateless claims-based authentication |
 | **Password Security**| `bcryptjs` (v3.0.3) | Salted one-way cryptographic password hashing |
@@ -171,7 +171,7 @@ sonisurgical-backend/
 │   │   ├── Transaction.js            # Ledger records: purchase/payment, BS timestamp, proof
 │   │   └── User.js                   # Staff & Admin user accounts with bcrypt hooks
 │   ├── routes/
-│   │   ├── aiExplain.js              # Gemini 4 Argon drug chat & clinical explanation
+│   │   ├── aiExplain.js              # Gemini 3.8 Flash drug chat & clinical explanation
 │   │   ├── auth.js                   # Login, registration, password updates, brute-force guard
 │   │   ├── medicines.js              # Inventory CRUD, stock adjustment, auto-complete
 │   │   ├── persons.js                # Customer directory, debt leaderboard, risk analysis
