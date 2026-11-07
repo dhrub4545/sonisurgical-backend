@@ -298,6 +298,18 @@ router.get("/suggestions", async (req, res, next) => {
   }
 });
 
+// GET /api/medicines/categories — distinct category list
+router.get("/categories", async (req, res, next) => {
+  try {
+    const defaultCategories = ["Tablet", "Syrup", "Vials", "Ointment"];
+    const dbCategories = await Medicine.distinct("category");
+    const set = new Set([...defaultCategories, ...dbCategories.filter(Boolean)]);
+    res.json(Array.from(set));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/medicines/:id — single medicine detail
 router.get("/:id", async (req, res, next) => {
   try {
