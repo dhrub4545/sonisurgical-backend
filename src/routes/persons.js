@@ -138,22 +138,23 @@ router.get("/", async (req, res, next) => {
       });
     }
 
-    // Section filtering: "market" matches explicit market OR legacy docs without section.
-    // "home" matches home section accounts or accounts tagged [Home].
-    if (section === "home") {
-      andClauses.push({
-        $or: [
-          { section: "home" },
-          { tole: { $regex: "\\[Home\\]", $options: "i" } },
-        ],
-      });
-    } else if (section === "market") {
-      andClauses.push({
-        $and: [
-          { section: { $ne: "home" } },
-          { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
-        ],
-      });
+    // Section filtering: ONLY apply for customers; vendors are common across Market & Home.
+    if (accountType !== "vendor") {
+      if (section === "home") {
+        andClauses.push({
+          $or: [
+            { section: "home" },
+            { tole: { $regex: "\\[Home\\]", $options: "i" } },
+          ],
+        });
+      } else if (section === "market") {
+        andClauses.push({
+          $and: [
+            { section: { $ne: "home" } },
+            { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+          ],
+        });
+      }
     }
 
     if (andClauses.length > 0) {
@@ -217,20 +218,22 @@ router.get("/leaderboard", async (req, res, next) => {
       });
     }
 
-    if (section === "home") {
-      andClauses.push({
-        $or: [
-          { section: "home" },
-          { tole: { $regex: "\\[Home\\]", $options: "i" } },
-        ],
-      });
-    } else if (section === "market") {
-      andClauses.push({
-        $and: [
-          { section: { $ne: "home" } },
-          { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
-        ],
-      });
+    if (accountType !== "vendor") {
+      if (section === "home") {
+        andClauses.push({
+          $or: [
+            { section: "home" },
+            { tole: { $regex: "\\[Home\\]", $options: "i" } },
+          ],
+        });
+      } else if (section === "market") {
+        andClauses.push({
+          $and: [
+            { section: { $ne: "home" } },
+            { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+          ],
+        });
+      }
     }
 
     if (andClauses.length > 0) {
@@ -288,20 +291,22 @@ router.get("/risk", async (req, res, next) => {
       });
     }
 
-    if (section === "home") {
-      andClauses.push({
-        $or: [
-          { section: "home" },
-          { tole: { $regex: "\\[Home\\]", $options: "i" } },
-        ],
-      });
-    } else if (section === "market") {
-      andClauses.push({
-        $and: [
-          { section: { $ne: "home" } },
-          { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
-        ],
-      });
+    if (accountType !== "vendor") {
+      if (section === "home") {
+        andClauses.push({
+          $or: [
+            { section: "home" },
+            { tole: { $regex: "\\[Home\\]", $options: "i" } },
+          ],
+        });
+      } else if (section === "market") {
+        andClauses.push({
+          $and: [
+            { section: { $ne: "home" } },
+            { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+          ],
+        });
+      }
     }
 
     if (andClauses.length > 0) {
