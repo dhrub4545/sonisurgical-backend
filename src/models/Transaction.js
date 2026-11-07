@@ -44,8 +44,12 @@ const transactionSchema = new mongoose.Schema(
 );
 
 // High-speed compound indexes for millions of transactions
-transactionSchema.index({ person: 1, createdAt: -1 }); // Instant customer transaction history
+transactionSchema.index({ person: 1, createdAt: -1 }); // Instant customer transaction history (newest first)
+transactionSchema.index({ person: 1, createdAt: 1 }); // FIFO chronological settlement calculation (oldest first)
+transactionSchema.index({ person: 1, type: 1, createdAt: 1 }); // FIFO purchases vs payments calculation
+transactionSchema.index({ person: 1, type: 1, createdAt: -1 }); // Filtered customer purchases/payments history
 transactionSchema.index({ bsDate: -1, createdAt: -1 }); // Daily sales and audit logs
 transactionSchema.index({ type: 1, createdAt: -1 });
+transactionSchema.index({ "items.medicineName": 1 }); // Instant item sales audits and tracing
 
 module.exports = mongoose.model("Transaction", transactionSchema);

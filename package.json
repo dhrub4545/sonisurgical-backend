@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "sync-indexes": "node scripts/sync_indexes.js",
     "export-data": "node export_data.js"
   },
   "dependencies": {

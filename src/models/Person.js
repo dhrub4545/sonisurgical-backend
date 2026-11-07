@@ -52,6 +52,14 @@ personSchema.index({ section: 1, riskStatus: 1, totalDue: -1 });
 personSchema.index({ totalDue: -1, name: 1 });
 personSchema.index({ riskStatus: 1, totalDue: -1 });
 personSchema.index({ name: 1, phone: 1 });
+
+// Instant alphabetical and recent sorting indexes (avoids in-memory SORT stage)
+personSchema.index({ accountType: 1, section: 1, name: 1 });
+personSchema.index({ accountType: 1, name: 1 });
+personSchema.index({ section: 1, name: 1 });
+personSchema.index({ accountType: 1, section: 1, updatedAt: -1 });
+personSchema.index({ updatedAt: -1 });
+
 personSchema.index({
   name: "text",
   rootName: "text",

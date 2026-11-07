@@ -8,6 +8,7 @@ const Medicine = require("./models/Medicine");
 const User = require("./models/User");
 const { syncAllPersonBalances } = require("./utils/ledgerService");
 const { syncFromDatabase } = require("./utils/medicineNamesService");
+const { ensureAllIndexes } = require("./utils/indexService");
 
 const personsRouter = require("./routes/persons");
 const transactionsRouter = require("./routes/transactions");
@@ -117,6 +118,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
       app.listen(PORT, async () => {
         console.log(`Server running securely on port ${PORT}`);
         await User.seedDefaultAdmin();
+        ensureAllIndexes();
         syncAllPersonBalances();
         syncFromDatabase(Medicine);
       });

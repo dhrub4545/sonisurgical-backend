@@ -30,4 +30,11 @@ medicineSchema.index({
   rackLocation: "text",
 });
 
+// High-performance compound & sorting indexes for inventory lookups
+medicineSchema.index({ category: 1, name: 1 }); // Filter by category & sort alphabetically
+medicineSchema.index({ category: 1, stockQuantity: 1 }); // Filter by category & sort by stock level
+medicineSchema.index({ stockQuantity: 1, name: 1 }); // Low-stock alerts and audits
+medicineSchema.index({ expiryDate: 1 }); // Expiry alerts & batches
+medicineSchema.index({ updatedAt: -1 }); // Recently modified inventory tracking
+
 module.exports = mongoose.model("Medicine", medicineSchema);
