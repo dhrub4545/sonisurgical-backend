@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const Medicine = require("../models/Medicine");
+const Category = require("../models/Category");
 const {
   getMedicineNameSuggestions,
   addMedicineName,
@@ -301,12 +302,50 @@ router.get("/suggestions", CacheService.cacheMiddleware("medicines", 180), async
 });
 
 // GET /api/medicines/categories — distinct category list
-router.get("/categories", CacheService.cacheMiddleware("medicines", 300), async (req, res, next) => {
+router.get("/categories", CacheService.cacheMiddleware("medicines", 60), async (req, res, next) => {
   try {
     const defaultCategories = ["Tablet", "Syrup", "Vials", "Ointment"];
-    const dbCategories = await Medicine.distinct("category");
-    const set = new Set([...defaultCategories, ...dbCategories.filter(Boolean)]);
+    const [dbCategories, customCategories] = await Promise.all([
+      Medicine.distinct("category"),
+      Category.find().lean().catch(() => []),
+    ]);
+    const customNames = (customCategories || []).map((c) => c.name);
+    const set = new Set([...defaultCategories, ...dbCategories.filter(Boolean), ...customNames.filter(Boolean)]);
     res.json(Array.from(set));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/medicines/categories — add new custom category
+router.post("/categories", async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    const clean = sanitizeString(name, 50);
+    if (!clean) {
+      return res.status(400).json({ message: "Category name is required" });
+    }
+    const formatted = clean
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+
+    await Category.findOneAndUpdate(
+      { name: { $regex: new RegExp(`^${escapeRegex(formatted)}$`, "i") } },
+      { name: formatted },
+      { upsert: true, new: true }
+    );
+
+    await CacheService.invalidateGroup("medicines");
+
+    const defaultCategories = ["Tablet", "Syrup", "Vials", "Ointment"];
+    const [dbCategories, customCategories] = await Promise.all([
+      Medicine.distinct("category"),
+      Category.find().lean().catch(() => []),
+    ]);
+    const customNames = (customCategories || []).map((c) => c.name);
+    const set = new Set([...defaultCategories, ...dbCategories.filter(Boolean), ...customNames.filter(Boolean)]);
+    res.status(201).json(Array.from(set));
   } catch (err) {
     next(err);
   }
