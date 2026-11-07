@@ -5,6 +5,7 @@ const Transaction = require("../models/Transaction");
 const { recalculatePersonBalance, calculateSettlementStatus } = require("../utils/ledgerService");
 const { protect } = require("../middleware/auth");
 const { escapeRegex, sanitizeString } = require("../utils/securityUtils");
+const CacheService = require("../utils/cacheService");
 
 const router = express.Router();
 
@@ -87,6 +88,8 @@ router.post("/", async (req, res, next) => {
       riskMonths: 0,
       transactionCount: 0,
     });
+    // Invalidate cached person lists & stats
+    await CacheService.invalidateGroup("persons");
     res.status(201).json(formatPerson(person));
   } catch (err) {
     next(err);
@@ -94,7 +97,7 @@ router.post("/", async (req, res, next) => {
 });
 
 // GET /api/persons — high-performance indexed search & list with optional pagination
-router.get("/", async (req, res, next) => {
+router.get("/", CacheService.cacheMiddleware("persons", 60), async (req, res, next) => {
   try {
     const {
       search = "",
@@ -194,7 +197,7 @@ router.get("/", async (req, res, next) => {
 });
 
 // GET /api/persons/leaderboard — O(1) indexed query sorted by total due
-router.get("/leaderboard", async (req, res, next) => {
+router.get("/leaderboard", CacheService.cacheMiddleware("persons", 60), async (req, res, next) => {
   try {
     const { page = 1, limit = 50, section = "", accountType = "" } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -263,7 +266,7 @@ router.get("/leaderboard", async (req, res, next) => {
 });
 
 // GET /api/persons/risk — O(1) indexed query for risk categories
-router.get("/risk", async (req, res, next) => {
+router.get("/risk", CacheService.cacheMiddleware("persons", 60), async (req, res, next) => {
   try {
     const { level, page = 1, limit = 50, section = "", accountType = "" } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -330,7 +333,7 @@ router.get("/risk", async (req, res, next) => {
 });
 
 // GET /api/persons/:id — get person details
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", CacheService.cacheMiddleware("persons", 60), async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: "Invalid person id" });
@@ -371,6 +374,8 @@ router.put("/:id", async (req, res, next) => {
       runValidators: false,
     });
     if (!person) return res.status(404).json({ message: "Person not found" });
+    // Invalidate persons cache
+    await CacheService.invalidateGroup("persons");
     res.json(formatPerson(person));
   } catch (err) {
     next(err);
@@ -383,6 +388,11 @@ router.delete("/:id", async (req, res, next) => {
     const person = await Person.findByIdAndDelete(req.params.id);
     if (!person) return res.status(404).json({ message: "Person not found" });
     await Transaction.deleteMany({ person: person._id });
+    // Invalidate persons & transactions cache
+    await Promise.all([
+      CacheService.invalidateGroup("persons"),
+      CacheService.invalidateGroup("transactions"),
+    ]);
     res.json({ message: "Person and their transactions deleted" });
   } catch (err) {
     next(err);
@@ -394,6 +404,8 @@ router.post("/:id/recalculate", async (req, res, next) => {
   try {
     const person = await recalculatePersonBalance(req.params.id);
     if (!person) return res.status(404).json({ message: "Person not found" });
+    // Invalidate persons cache
+    await CacheService.invalidateGroup("persons");
     res.json(formatPerson(person));
   } catch (err) {
     next(err);

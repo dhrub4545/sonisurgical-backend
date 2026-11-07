@@ -9,6 +9,7 @@ const {
 const { getDaysUntilExpiry } = require("../utils/nepaliDate");
 const { protect } = require("../middleware/auth");
 const { escapeRegex, sanitizeString, parsePositiveNumber } = require("../utils/securityUtils");
+const CacheService = require("../utils/cacheService");
 
 const router = express.Router();
 
@@ -167,6 +168,7 @@ router.post("/seed", async (req, res, next) => {
       return res.json({ message: "Inventory already has medicines", count: existing });
     }
     const inserted = await Medicine.insertMany(SEED_MEDICINES);
+    await CacheService.invalidateGroup("medicines");
     res.json({ message: "Seeded initial medicine catalog", count: inserted.length });
   } catch (err) {
     next(err);
@@ -174,7 +176,7 @@ router.post("/seed", async (req, res, next) => {
 });
 
 // GET /api/medicines/stats — Overview stats
-router.get("/stats", async (req, res, next) => {
+router.get("/stats", CacheService.cacheMiddleware("medicines", 60), async (req, res, next) => {
   try {
     const medicines = await Medicine.find();
     let totalItems = medicines.length;
@@ -217,7 +219,7 @@ router.get("/stats", async (req, res, next) => {
 });
 
 // GET /api/medicines — list / search / filter
-router.get("/", async (req, res, next) => {
+router.get("/", CacheService.cacheMiddleware("medicines", 60), async (req, res, next) => {
   try {
     const {
       search = "",
@@ -285,7 +287,7 @@ router.get("/", async (req, res, next) => {
 });
 
 // GET /api/medicines/suggestions?query=... — fast autocomplete suggestions from MongoDB
-router.get("/suggestions", async (req, res, next) => {
+router.get("/suggestions", CacheService.cacheMiddleware("medicines", 180), async (req, res, next) => {
   try {
     const { query = "", limit = 15 } = req.query;
     const suggestions = await getMedicineNameSuggestions(
@@ -299,7 +301,7 @@ router.get("/suggestions", async (req, res, next) => {
 });
 
 // GET /api/medicines/categories — distinct category list
-router.get("/categories", async (req, res, next) => {
+router.get("/categories", CacheService.cacheMiddleware("medicines", 300), async (req, res, next) => {
   try {
     const defaultCategories = ["Tablet", "Syrup", "Vials", "Ointment"];
     const dbCategories = await Medicine.distinct("category");
@@ -311,7 +313,7 @@ router.get("/categories", async (req, res, next) => {
 });
 
 // GET /api/medicines/:id — single medicine detail
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", CacheService.cacheMiddleware("medicines", 60), async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: "Invalid medicine id" });
@@ -363,6 +365,9 @@ router.post("/", async (req, res, next) => {
 
     // Auto-append new medicine name to MongoDB MedicineSuggestion collection
     await addMedicineName(medicine.name);
+
+    // Invalidate medicines cache
+    await CacheService.invalidateGroup("medicines");
 
     res.status(201).json(medicine);
   } catch (err) {
@@ -419,6 +424,9 @@ router.put("/:id", async (req, res, next) => {
       await addMedicineName(updated.name);
     }
 
+    // Invalidate medicines cache
+    await CacheService.invalidateGroup("medicines");
+
     res.json(updated);
   } catch (err) {
     next(err);
@@ -446,6 +454,9 @@ router.post("/:id/adjust-stock", async (req, res, next) => {
     medicine.stockQuantity = finalStock;
     await medicine.save();
 
+    // Invalidate medicines cache
+    await CacheService.invalidateGroup("medicines");
+
     res.json(medicine);
   } catch (err) {
     next(err);
@@ -461,6 +472,9 @@ router.delete("/:id", async (req, res, next) => {
 
     const deleted = await Medicine.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Medicine not found" });
+
+    // Invalidate medicines cache
+    await CacheService.invalidateGroup("medicines");
 
     res.json({ message: "Medicine removed from inventory", id: req.params.id });
   } catch (err) {

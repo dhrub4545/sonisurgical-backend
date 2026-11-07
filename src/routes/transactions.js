@@ -4,6 +4,7 @@ const Transaction = require("../models/Transaction");
 const Medicine = require("../models/Medicine");
 const { getBSDateTime } = require("../utils/nepaliDate");
 const { recalculatePersonBalance, calculateSettlementStatus } = require("../utils/ledgerService");
+const CacheService = require("../utils/cacheService");
 const {
   uploadPurchaseProof,
   deleteProofPhoto,
@@ -118,6 +119,13 @@ router.post("/", async (req, res, next) => {
       await recalculatePersonBalance(person._id);
       const settlement = await calculateSettlementStatus(person._id);
 
+      // Invalidate persons & transactions cache
+      await Promise.all([
+        CacheService.invalidateGroup("persons"),
+        CacheService.invalidateGroup("transactions"),
+        CacheService.invalidateGroup("medicines"),
+      ]);
+
       return res.status(201).json({
         ...txn.toObject(),
         settlement,
@@ -146,6 +154,12 @@ router.post("/", async (req, res, next) => {
       // Automatically delete proof photos from Cloudinary for fully settled purchases
       await deleteClearedProofPhotos(person._id, Transaction);
 
+      // Invalidate persons & transactions cache
+      await Promise.all([
+        CacheService.invalidateGroup("persons"),
+        CacheService.invalidateGroup("transactions"),
+      ]);
+
       return res.status(201).json({
         ...txn.toObject(),
         settlement,
@@ -159,7 +173,7 @@ router.post("/", async (req, res, next) => {
 });
 
 // GET /api/transactions?personId=...&page=1&limit=50 — paginated history (newest first)
-router.get("/", async (req, res, next) => {
+router.get("/", CacheService.cacheMiddleware("transactions", 45), async (req, res, next) => {
   try {
     const { personId, page = 1, limit = 50 } = req.query;
     const query = personId ? { person: personId } : {};
@@ -204,6 +218,12 @@ router.delete("/:id", async (req, res, next) => {
     // Recalculate customer balance
     await recalculatePersonBalance(txn.person);
 
+    // Invalidate persons & transactions cache
+    await Promise.all([
+      CacheService.invalidateGroup("persons"),
+      CacheService.invalidateGroup("transactions"),
+    ]);
+
     res.json({ message: "Transaction deleted" });
   } catch (err) {
     next(err);
@@ -233,6 +253,11 @@ router.post("/archive/prune", async (req, res, next) => {
       personId: personId || null,
       confirmation: confirmation ? confirmation.trim() : "",
     });
+    // Invalidate persons & transactions cache
+    await Promise.all([
+      CacheService.invalidateGroup("persons"),
+      CacheService.invalidateGroup("transactions"),
+    ]);
     res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
