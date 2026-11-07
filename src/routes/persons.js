@@ -11,16 +11,34 @@ const router = express.Router();
 // Apply JWT authentication guard to all persons endpoints
 router.use(protect);
 
-// Helper to format person with backward-compatible risk object and default section
+// List of known vendor names (as safeguard fallback)
+const KNOWN_VENDORS = [
+  "dhanusha medico",
+  "kunal pharma",
+  "samiksha pharmacy",
+  "sumitra vet pharma",
+];
+
+function isVendorName(name) {
+  if (!name || typeof name !== "string") return false;
+  const lower = name.trim().toLowerCase();
+  return KNOWN_VENDORS.some((v) => lower.includes(v) || v.includes(lower));
+}
+
+// Helper to format person with backward-compatible risk object, default section and accountType
 function formatPerson(p) {
   const doc = p.toObject ? p.toObject() : p;
   const isHome =
     doc.section === "home" ||
     (typeof doc.tole === "string" && doc.tole.includes("[Home]")) ||
     (typeof doc.rootName === "string" && doc.rootName.includes("[Home]"));
+  const isVendor =
+    doc.accountType === "vendor" || isVendorName(doc.name);
+
   return {
     ...doc,
     section: isHome ? "home" : "market",
+    accountType: isVendor ? "vendor" : (doc.accountType || "customer"),
     risk: {
       status: doc.riskStatus || "clear",
       label: doc.riskLabel || "Clear",
@@ -29,25 +47,38 @@ function formatPerson(p) {
   };
 }
 
-// POST /api/persons — create person
+// POST /api/persons — create person or vendor
 router.post("/", async (req, res, next) => {
   try {
-    const { name, rootName = "", tole = "", phone = "", section = "market" } = req.body;
+    const {
+      name,
+      rootName = "",
+      tole = "",
+      phone = "",
+      section = "market",
+      accountType = "customer",
+    } = req.body;
     const cleanName = sanitizeString(name, 100);
     if (!cleanName) {
-      return res.status(400).json({ message: "Customer name is required" });
+      return res.status(400).json({ message: "Name is required" });
     }
     const cleanTole = sanitizeString(tole, 100);
     const isHome =
       String(section).toLowerCase() === "home" ||
       cleanTole.includes("[Home]");
     const targetSection = isHome ? "home" : "market";
+    const targetAccountType =
+      String(accountType).toLowerCase() === "vendor" || isVendorName(cleanName)
+        ? "vendor"
+        : "customer";
+
     const person = await Person.create({
       name: cleanName,
       rootName: sanitizeString(rootName, 100),
       tole: cleanTole,
       phone: sanitizeString(phone, 30),
       section: targetSection,
+      accountType: targetAccountType,
       totalPurchases: 0,
       totalPaid: 0,
       totalDue: 0,
@@ -69,6 +100,7 @@ router.get("/", async (req, res, next) => {
       search = "",
       filter = "",
       section = "",
+      accountType = "",
       page = 1,
       limit = 100,
       sort = "name",
@@ -88,6 +120,21 @@ router.get("/", async (req, res, next) => {
           { tole: { $regex: escaped, $options: "i" } },
           { phone: { $regex: escaped, $options: "i" } },
         ],
+      });
+    }
+
+    // Account type filtering: "vendor" vs "customer"
+    if (accountType === "vendor") {
+      andClauses.push({
+        $or: [
+          { accountType: "vendor" },
+          { name: { $in: [ /dhanusha medico/i, /kunal pharma/i, /samiksha pharmacy/i, /sumitra vet pharma/i ] } },
+        ],
+      });
+    } else if (accountType === "customer") {
+      andClauses.push({
+        accountType: { $ne: "vendor" },
+        name: { $nin: [ /dhanusha medico/i, /kunal pharma/i, /samiksha pharmacy/i, /sumitra vet pharma/i ] },
       });
     }
 
@@ -148,22 +195,46 @@ router.get("/", async (req, res, next) => {
 // GET /api/persons/leaderboard — O(1) indexed query sorted by total due
 router.get("/leaderboard", async (req, res, next) => {
   try {
-    const { page = 1, limit = 50, section = "" } = req.query;
+    const { page = 1, limit = 50, section = "", accountType = "" } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
     const skip = (pageNum - 1) * limitNum;
 
     const query = { totalDue: { $gt: 0 } };
+    const andClauses = [];
+
+    if (accountType === "vendor") {
+      andClauses.push({
+        $or: [
+          { accountType: "vendor" },
+          { name: { $in: [ /dhanusha medico/i, /kunal pharma/i, /samiksha pharmacy/i, /sumitra vet pharma/i ] } },
+        ],
+      });
+    } else if (accountType === "customer") {
+      andClauses.push({
+        accountType: { $ne: "vendor" },
+        name: { $nin: [ /dhanusha medico/i, /kunal pharma/i, /samiksha pharmacy/i, /sumitra vet pharma/i ] },
+      });
+    }
+
     if (section === "home") {
-      query.$or = [
-        { section: "home" },
-        { tole: { $regex: "\\[Home\\]", $options: "i" } },
-      ];
+      andClauses.push({
+        $or: [
+          { section: "home" },
+          { tole: { $regex: "\\[Home\\]", $options: "i" } },
+        ],
+      });
     } else if (section === "market") {
-      query.$and = [
-        { section: { $ne: "home" } },
-        { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
-      ];
+      andClauses.push({
+        $and: [
+          { section: { $ne: "home" } },
+          { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      query.$and = andClauses;
     }
 
     const [persons, totalCount] = await Promise.all([
@@ -191,25 +262,50 @@ router.get("/leaderboard", async (req, res, next) => {
 // GET /api/persons/risk — O(1) indexed query for risk categories
 router.get("/risk", async (req, res, next) => {
   try {
-    const { level, page = 1, limit = 50, section = "" } = req.query;
+    const { level, page = 1, limit = 50, section = "", accountType = "" } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
     const skip = (pageNum - 1) * limitNum;
 
     const query = { totalDue: { $gt: 0 } };
+    const andClauses = [];
+
     if (level) {
       query.riskStatus = level;
     }
+
+    if (accountType === "vendor") {
+      andClauses.push({
+        $or: [
+          { accountType: "vendor" },
+          { name: { $in: [ /dhanusha medico/i, /kunal pharma/i, /samiksha pharmacy/i, /sumitra vet pharma/i ] } },
+        ],
+      });
+    } else if (accountType === "customer") {
+      andClauses.push({
+        accountType: { $ne: "vendor" },
+        name: { $nin: [ /dhanusha medico/i, /kunal pharma/i, /samiksha pharmacy/i, /sumitra vet pharma/i ] },
+      });
+    }
+
     if (section === "home") {
-      query.$or = [
-        { section: "home" },
-        { tole: { $regex: "\\[Home\\]", $options: "i" } },
-      ];
+      andClauses.push({
+        $or: [
+          { section: "home" },
+          { tole: { $regex: "\\[Home\\]", $options: "i" } },
+        ],
+      });
     } else if (section === "market") {
-      query.$and = [
-        { section: { $ne: "home" } },
-        { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
-      ];
+      andClauses.push({
+        $and: [
+          { section: { $ne: "home" } },
+          { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      query.$and = andClauses;
     }
 
     const [persons, totalCount] = await Promise.all([
@@ -249,9 +345,9 @@ router.get("/:id", async (req, res, next) => {
 // PUT /api/persons/:id — update person info
 router.put("/:id", async (req, res, next) => {
   try {
-    const { name, rootName = "", tole = "", phone = "", section } = req.body;
+    const { name, rootName = "", tole = "", phone = "", section, accountType } = req.body;
     if (!name || !name.trim()) {
-      return res.status(400).json({ message: "Customer name is required" });
+      return res.status(400).json({ message: "Name is required" });
     }
     const updates = {
       name: name.trim(),
@@ -261,6 +357,9 @@ router.put("/:id", async (req, res, next) => {
     };
     if (section && ["market", "home"].includes(String(section).toLowerCase())) {
       updates.section = String(section).toLowerCase();
+    }
+    if (accountType && ["customer", "vendor"].includes(String(accountType).toLowerCase())) {
+      updates.accountType = String(accountType).toLowerCase();
     }
     const person = await Person.findByIdAndUpdate(req.params.id, updates, {
       new: true,

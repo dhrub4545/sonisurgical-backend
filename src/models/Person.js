@@ -12,6 +12,12 @@ const personSchema = new mongoose.Schema(
       default: "market",
       index: true,
     }, // "market" (shop) or "home" account
+    accountType: {
+      type: String,
+      enum: ["customer", "vendor"],
+      default: "customer",
+      index: true,
+    }, // "customer" (regular person) or "vendor" (supplier/distributor)
 
     // Materialized ledger balances for high-scale O(1) performance
     totalPurchases: { type: Number, default: 0, min: 0, index: true },
@@ -39,6 +45,8 @@ const personSchema = new mongoose.Schema(
 );
 
 // High-performance compound indexes for scale
+personSchema.index({ accountType: 1, section: 1, totalDue: -1, name: 1 });
+personSchema.index({ accountType: 1, totalDue: -1, name: 1 });
 personSchema.index({ section: 1, totalDue: -1, name: 1 });
 personSchema.index({ section: 1, riskStatus: 1, totalDue: -1 });
 personSchema.index({ totalDue: -1, name: 1 });
