@@ -11,11 +11,16 @@ const router = express.Router();
 // Apply JWT authentication guard to all persons endpoints
 router.use(protect);
 
-// Helper to format person with backward-compatible risk object
+// Helper to format person with backward-compatible risk object and default section
 function formatPerson(p) {
   const doc = p.toObject ? p.toObject() : p;
+  const isHome =
+    doc.section === "home" ||
+    (typeof doc.tole === "string" && doc.tole.includes("[Home]")) ||
+    (typeof doc.rootName === "string" && doc.rootName.includes("[Home]"));
   return {
     ...doc,
+    section: isHome ? "home" : "market",
     risk: {
       status: doc.riskStatus || "clear",
       label: doc.riskLabel || "Clear",
@@ -27,16 +32,22 @@ function formatPerson(p) {
 // POST /api/persons — create person
 router.post("/", async (req, res, next) => {
   try {
-    const { name, rootName = "", tole = "", phone = "" } = req.body;
+    const { name, rootName = "", tole = "", phone = "", section = "market" } = req.body;
     const cleanName = sanitizeString(name, 100);
     if (!cleanName) {
       return res.status(400).json({ message: "Customer name is required" });
     }
+    const cleanTole = sanitizeString(tole, 100);
+    const isHome =
+      String(section).toLowerCase() === "home" ||
+      cleanTole.includes("[Home]");
+    const targetSection = isHome ? "home" : "market";
     const person = await Person.create({
       name: cleanName,
       rootName: sanitizeString(rootName, 100),
-      tole: sanitizeString(tole, 100),
+      tole: cleanTole,
       phone: sanitizeString(phone, 30),
+      section: targetSection,
       totalPurchases: 0,
       totalPaid: 0,
       totalDue: 0,
@@ -57,23 +68,49 @@ router.get("/", async (req, res, next) => {
     const {
       search = "",
       filter = "",
+      section = "",
       page = 1,
       limit = 100,
       sort = "name",
     } = req.query;
 
     const query = {};
+    const andClauses = [];
 
     // Safely escaped indexed search across name, rootName, tole, phone
     const cleanSearch = sanitizeString(search, 100);
     if (cleanSearch) {
       const escaped = escapeRegex(cleanSearch);
-      query.$or = [
-        { name: { $regex: escaped, $options: "i" } },
-        { rootName: { $regex: escaped, $options: "i" } },
-        { tole: { $regex: escaped, $options: "i" } },
-        { phone: { $regex: escaped, $options: "i" } },
-      ];
+      andClauses.push({
+        $or: [
+          { name: { $regex: escaped, $options: "i" } },
+          { rootName: { $regex: escaped, $options: "i" } },
+          { tole: { $regex: escaped, $options: "i" } },
+          { phone: { $regex: escaped, $options: "i" } },
+        ],
+      });
+    }
+
+    // Section filtering: "market" matches explicit market OR legacy docs without section.
+    // "home" matches home section accounts or accounts tagged [Home].
+    if (section === "home") {
+      andClauses.push({
+        $or: [
+          { section: "home" },
+          { tole: { $regex: "\\[Home\\]", $options: "i" } },
+        ],
+      });
+    } else if (section === "market") {
+      andClauses.push({
+        $and: [
+          { section: { $ne: "home" } },
+          { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      query.$and = andClauses;
     }
 
     // Filter
@@ -111,12 +148,24 @@ router.get("/", async (req, res, next) => {
 // GET /api/persons/leaderboard — O(1) indexed query sorted by total due
 router.get("/leaderboard", async (req, res, next) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page = 1, limit = 50, section = "" } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
     const skip = (pageNum - 1) * limitNum;
 
     const query = { totalDue: { $gt: 0 } };
+    if (section === "home") {
+      query.$or = [
+        { section: "home" },
+        { tole: { $regex: "\\[Home\\]", $options: "i" } },
+      ];
+    } else if (section === "market") {
+      query.$and = [
+        { section: { $ne: "home" } },
+        { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+      ];
+    }
+
     const [persons, totalCount] = await Promise.all([
       Person.find(query)
         .sort({ totalDue: -1, name: 1 })
@@ -142,7 +191,7 @@ router.get("/leaderboard", async (req, res, next) => {
 // GET /api/persons/risk — O(1) indexed query for risk categories
 router.get("/risk", async (req, res, next) => {
   try {
-    const { level, page = 1, limit = 50 } = req.query;
+    const { level, page = 1, limit = 50, section = "" } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
     const skip = (pageNum - 1) * limitNum;
@@ -150,6 +199,17 @@ router.get("/risk", async (req, res, next) => {
     const query = { totalDue: { $gt: 0 } };
     if (level) {
       query.riskStatus = level;
+    }
+    if (section === "home") {
+      query.$or = [
+        { section: "home" },
+        { tole: { $regex: "\\[Home\\]", $options: "i" } },
+      ];
+    } else if (section === "market") {
+      query.$and = [
+        { section: { $ne: "home" } },
+        { tole: { $not: { $regex: "\\[Home\\]", $options: "i" } } },
+      ];
     }
 
     const [persons, totalCount] = await Promise.all([
@@ -189,7 +249,7 @@ router.get("/:id", async (req, res, next) => {
 // PUT /api/persons/:id — update person info
 router.put("/:id", async (req, res, next) => {
   try {
-    const { name, rootName = "", tole = "", phone = "" } = req.body;
+    const { name, rootName = "", tole = "", phone = "", section } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ message: "Customer name is required" });
     }
@@ -199,6 +259,9 @@ router.put("/:id", async (req, res, next) => {
       tole: (tole || "").trim(),
       phone: (phone || "").trim(),
     };
+    if (section && ["market", "home"].includes(String(section).toLowerCase())) {
+      updates.section = String(section).toLowerCase();
+    }
     const person = await Person.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: false,

@@ -6,6 +6,12 @@ const personSchema = new mongoose.Schema(
     rootName: { type: String, trim: true, default: "", required: false }, // optional family root name
     tole: { type: String, trim: true, default: "", required: false, index: true }, // optional area/tole
     phone: { type: String, trim: true, default: "", required: false, index: true }, // optional phone
+    section: {
+      type: String,
+      enum: ["market", "home"],
+      default: "market",
+      index: true,
+    }, // "market" (shop) or "home" account
 
     // Materialized ledger balances for high-scale O(1) performance
     totalPurchases: { type: Number, default: 0, min: 0, index: true },
@@ -33,6 +39,8 @@ const personSchema = new mongoose.Schema(
 );
 
 // High-performance compound indexes for scale
+personSchema.index({ section: 1, totalDue: -1, name: 1 });
+personSchema.index({ section: 1, riskStatus: 1, totalDue: -1 });
 personSchema.index({ totalDue: -1, name: 1 });
 personSchema.index({ riskStatus: 1, totalDue: -1 });
 personSchema.index({ name: 1, phone: 1 });
