@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "sync-indexes": "node scripts/sync_indexes.js",
+    "sync-classifications": "node scripts/migrate_person_fields.js",
     "export-data": "node export_data.js"
   },
   "dependencies": {
