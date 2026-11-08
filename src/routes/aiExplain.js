@@ -1,5 +1,6 @@
 const express = require("express");
 const { protect } = require("../middleware/auth");
+const { getPrioritizedGeminiModels, invalidateModelCache } = require("../utils/geminiModelService");
 
 const router = express.Router();
 
@@ -138,15 +139,12 @@ Output valid JSON strictly following this schema:
     }
   }
 
-  const GEMINI_MODELS = [
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-  ];
+  const models = await getPrioritizedGeminiModels(keys[0]);
 
   let lastError = null;
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
-    for (const model of GEMINI_MODELS) {
+    for (const model of models) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
         const response = await fetch(url, {
@@ -165,6 +163,9 @@ Output valid JSON strictly following this schema:
         if (!response.ok) {
           const errBody = await response.text();
           console.warn(`Gemini [${model}] Key ${i + 1} returned status ${response.status}:`, errBody.substring(0, 120));
+          if (response.status === 404) {
+            invalidateModelCache();
+          }
           lastError = new Error(`Model ${model} Key ${i + 1} HTTP ${response.status}: ${errBody}`);
           continue;
         }
@@ -269,15 +270,12 @@ Guidelines:
     parts: currentParts,
   });
 
-  const GEMINI_CHAT_MODELS = [
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-  ];
+  const models = await getPrioritizedGeminiModels(keys[0]);
 
   let lastError = null;
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
-    for (const model of GEMINI_CHAT_MODELS) {
+    for (const model of models) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
         const response = await fetch(url, {
@@ -296,6 +294,9 @@ Guidelines:
         if (!response.ok) {
           const errBody = await response.text();
           console.warn(`Gemini Chat [${model}] Key ${i + 1} returned status ${response.status}:`, errBody.substring(0, 120));
+          if (response.status === 404) {
+            invalidateModelCache();
+          }
           lastError = new Error(`Model ${model} Key ${i + 1} HTTP ${response.status}: ${errBody}`);
           continue;
         }
