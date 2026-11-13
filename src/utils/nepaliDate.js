@@ -1,20 +1,41 @@
 const NepaliDate = require("nepali-date-converter").default;
 
+// Kathmandu timezone offset: UTC + 5 hours 45 minutes (+05:45)
+const KATHMANDU_OFFSET_MS = (5 * 60 + 45) * 60 * 1000;
+
 /**
- * Returns the current Nepali (BS) date and time.
- * @param {Date} [adDate=new Date()]
- * @returns {{ bsDate: string, bsTime: string }} e.g. { bsDate: "2082-04-28", bsTime: "14:32:05" }
+ * Returns the Nepali (BS) date and time converted to Asia/Kathmandu (UTC+05:45).
+ * Independent of the server host OS/cloud container timezone (e.g. Render, Vercel, Docker).
+ * @param {Date|string|number} [adDate=new Date()]
+ * @returns {{ bsDate: string, bsTime: string }} e.g. { bsDate: "2083-07-27", bsTime: "16:24:45" }
  */
 function getBSDateTime(adDate = new Date()) {
-  const nd = new NepaliDate(adDate);
+  const d = adDate instanceof Date ? adDate : new Date(adDate || Date.now());
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+
+  // Shift UTC timestamp to Kathmandu wall-clock time (+05:45)
+  const ktmTime = new Date(validDate.getTime() + KATHMANDU_OFFSET_MS);
+
+  const year = ktmTime.getUTCFullYear();
+  const month = ktmTime.getUTCMonth(); // 0-based
+  const day = ktmTime.getUTCDate();
+  const hours = ktmTime.getUTCHours();
+  const minutes = ktmTime.getUTCMinutes();
+  const seconds = ktmTime.getUTCSeconds();
+
+  // Safe Date at noon (12:00:00) prevents day boundary rollover in nepali-date-converter
+  const safeDate = new Date(year, month, day, 12, 0, 0);
+  const nd = new NepaliDate(safeDate);
   const bsDate = nd.format("YYYY-MM-DD");
+
   const pad = (n) => String(n).padStart(2, "0");
-  const bsTime = `${pad(adDate.getHours())}:${pad(adDate.getMinutes())}:${pad(adDate.getSeconds())}`;
+  const bsTime = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+
   return { bsDate, bsTime };
 }
 
 /**
- * Full display string, e.g. "2082-04-28 14:32:05"
+ * Full display string in Kathmandu timezone, e.g. "2082-04-28 14:32:05"
  */
 function getBSDateTimeString(adDate = new Date()) {
   const { bsDate, bsTime } = getBSDateTime(adDate);
@@ -63,4 +84,5 @@ module.exports = {
   getBSDateTime,
   getBSDateTimeString,
   getDaysUntilExpiry,
+  KATHMANDU_OFFSET_MS,
 };
